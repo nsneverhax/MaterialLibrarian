@@ -11,8 +11,11 @@ public class MaterialPass
 
     public uint VSPropCount { get; set; } = 0;
     public uint PSPropCount { get; set; } = 0;
+
+    // V: Supposedly a copy of the above
     public uint VSPropCountCopy { get; set; } = 0;
     public uint PSPropCountCopy { get; set; } = 0;
+
     public uint SampleCount { get; set; } = 0;
 
     public uint OtherA { get; set; } = 0;
@@ -43,6 +46,11 @@ public class MaterialPass
 
         RenderStates = new(new RenderState[br.ReadUInt32()]);
         uint renderStatePointer = br.ReadRelativePointer();
+
+#if !MATLIB_NOEXCEPT
+        if (br.MaterialLibrary is null)
+            throw new ArgumentNullException(nameof(br.MaterialLibrary));
+#endif
 
         if (br.MaterialLibrary.Version < 4)
         {
