@@ -40,8 +40,13 @@ public class MatChunk
         get => _streamPos;
         set
         {
-            if (Grow && _streamPos > End)
-                _size = _streamPos - _address;
+            if (value > End)
+            {
+                if (Grow)
+                    _size = value - _address;
+                else
+                    throw new InvalidOperationException("Attempted to write outside chunk boundaries!");
+            }
 
             _streamPos = Math.Clamp(value, _address, End);
         }
@@ -204,6 +209,11 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
                     {
                         DefaultsCount += (uint)shader.Defaults.Count;
                         UIPropertyCount += (uint)shader.UIProperties.Count;
+                        expectedStringChunkSize += (uint)shader.PropertyName.Length + 1;
+
+                        if (shader.PropertyType == ShaderPropertyType.SAMPLE)
+                            expectedStringChunkSize += (uint)shader.SampleName.Length + 1;
+
                         foreach (var property in shader.UIProperties)
                         {
                             expectedStringChunkSize += (uint)(property.Name.Length + 1);
@@ -214,6 +224,7 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
             }
         }
 
+        Console.WriteLine($"ExpectedString size: {expectedStringChunkSize}");
         HeaderChunk.Size = (MaterialLibrary.Version == 2 ? 20u : 16u);
 
         TemplateTableChunk.Address = HeaderChunk.End;
@@ -247,7 +258,7 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         PropertyValueChunk.Size = expectedPropertyValueChunkSize;
 
         StringsChunk.Address = PropertyValueChunk.End;
-        StringsChunk.Size = expectedPropertyValueChunkSize;
+        StringsChunk.Size = expectedStringChunkSize;
 
         Write(new byte[StringsChunk.End]);
 
@@ -289,6 +300,14 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         if (ActiveChunk is not null)
             ActiveChunk.StreamPosition++;
     }
+    public void Write(char value)
+    {
+        BaseStream.WriteByte((byte)value);
+
+        if (ActiveChunk is not null)
+            ActiveChunk.StreamPosition++;
+    }
+
     public void Write(byte[] value)
     {
         BaseStream.Write(value);
@@ -392,7 +411,7 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
 
         PopChunk();
 
-        Write(StringsChunk.StreamPosition);
+        Write(StringsChunk.StreamPosition - TemplateChunk.Address);
     }
 
     struct CachedMicroCodeWrite(uint vertexShaderPointerAddress, byte[] vertexShader, uint pixelShaderPointerAddress, byte[] pixelShader)
@@ -441,10 +460,15 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         var fileSizeLengthAddress = Tell();
         Write(0x00); // V: temp
 
+        int iterator = 0;
+
         foreach (var template in MaterialLibrary.MaterialTemplates)
+        {
+            Trace.WriteLine($"{iterator++}");
             Write(template);
+        }
 
-
+        Seek(0, SeekOrigin.End);
         WriteAtAddress(fileSizeLengthAddress, Tell() - fileSizeLengthAddress);
 
         MaterialLibrary = null;
@@ -463,12 +487,14 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         Write((uint)template.MaterialTechniques.Count);
         Write(TechniqueChunk.StreamPosition);
 
-        Write((uint)template.UIProperties.Count);
-        Write(UIPropertiesChunk.StreamPosition);
-
         foreach (var technique in template.MaterialTechniques)
             Write(technique);
 
+        Write((uint)template.UIProperties.Count);
+        Write(UIPropertiesChunk.StreamPosition);
+
+        foreach (var  uiProperties in template.UIProperties)
+            Write(uiProperties);
 
         PopChunk();
     }
@@ -485,8 +511,18 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         Write((uint)technique.MaterialPasses.Count);
         Write(PassChunk.StreamPosition);
 
+        foreach (var pass in technique.MaterialPasses)
+            Write(pass);
+
+
         Write((uint)technique.Flags.Count);
         Write(UIPropertiesChunk.StreamPosition);
+
+        PushChunk(UIPropertiesChunk);
+        foreach (var flag in technique.Flags)
+            Write(flag);
+
+        PopChunk();
 
         Write(technique.ConstantB);
         foreach (var value in technique.SkipA)
@@ -497,15 +533,6 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
 
         if (MaterialLibrary!.Version >= 4)
             Write(technique.AboveVersion4Structure);
-
-        foreach (var pass in technique.MaterialPasses)
-            Write(pass);
-
-        PushChunk(UIPropertiesChunk);
-        foreach (var flag in technique.Flags)
-            Write(flag);
-        
-        PopChunk();
 
         PopChunk();
 
