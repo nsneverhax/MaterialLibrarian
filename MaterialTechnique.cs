@@ -1,4 +1,7 @@
-﻿using System.Xml.Linq;
+﻿using MaterialLibrarian.IO;
+using System.Diagnostics;
+using System.Reflection;
+using System.Xml.Linq;
 
 namespace MaterialLibrarian;
 
@@ -22,22 +25,25 @@ public class MaterialTechniqueSubObject
     public uint UnknownA { get; set; } = 0;
     public uint UnknownB { get; set; } = 0;
 
-    public byte[] VertexShaderCode { get; private set; } = Array.Empty<byte>();
-    public byte[] PixelShaderCode { get; private set; } = Array.Empty<byte>();
+    public byte[] VertexShaderCode { get; private set; } = [];
+    public byte[] PixelShaderCode { get; private set; } = [];
 
     public MaterialTechniqueSubObject() { }
     public MaterialTechniqueSubObject(MatBinaryReader br) => Deserialize(br);
 
     public void Deserialize(MatBinaryReader br)
     {
+        if (br.MaterialLibrary.Version >= 4)
+            br.ReadBytes(Version4Structure);
+
         VertexShaderCode = new byte[br.ReadUInt32()];
         vCTABConstant = br.ReadUInt32();
-        var vCTABPointer = br.MicroCodeOffset + br.ReadUInt32();
+        var vCTABPointer = br.MicroCodeAddress + br.ReadUInt32();
         VertexShaderMemoryOffset = br.ReadUInt32();
 
         PixelShaderCode = new byte[br.ReadUInt32()];
         pCTABConstant = br.ReadUInt32();
-        var pCTABPointer = br.MicroCodeOffset + br.ReadUInt32();
+        var pCTABPointer = br.MicroCodeAddress + br.ReadUInt32();
         PixelShaderMemoryOffset = br.ReadUInt32();
 
         A.Deserialize(br);
@@ -57,13 +63,15 @@ public class MaterialTechniqueSubObject
 
         if (VertexShaderCode.Length > 0)
         {
+            br.TEMP.Add((vCTABPointer, "VERTEX"));
             br.Seek(vCTABPointer);
             br.ReadBytes(VertexShaderCode);
         }
 
         if (PixelShaderCode.Length > 0)
         {
-            br.Seek(vCTABPointer);
+            br.TEMP.Add((pCTABPointer, "PIXEL"));
+            br.Seek(pCTABPointer);
             br.ReadBytes(PixelShaderCode);
         }
 
@@ -77,14 +85,14 @@ public class MaterialTechniqueSubObject
 
 public class MaterialTechnique
 {
-    public const uint BinarySize = 440;
+    public const uint BinarySize = 0x1B8;
 
     public uint Checksum { get; set; } = 0;
     public uint UnknownMember2_0x04 { get; set; } = 0;
-    public List<MaterialPass> MaterialPasses { get; set; } = new();
-    public List<uint> Flags { get; set; } = new();
+    public List<MaterialPass> MaterialPasses { get; set; } = [];
+    public List<uint> Flags { get; set; } = [];
     public uint ConstantB { get; set; } = 0;
-    public byte[] SkipA { get; private set; } = new byte[12 * 4];
+    public uint[] SkipA { get; private set; } = new uint[12];
     public byte[] AboveVersion4Structure { get; set; } = new byte[8];
 
     public MaterialTechniqueSubObject[] SubObjects { get; private set; } = new MaterialTechniqueSubObject[5];
@@ -94,6 +102,10 @@ public class MaterialTechnique
     public MaterialTechnique() { }
     public MaterialTechnique(MatBinaryReader br) => Deserialize(br);
 
+    public void Serialize(MatBinaryWriter bw)
+    {
+
+    }
     public void Deserialize(MatBinaryReader br)
     {
         uint start = br.Tell();
@@ -110,7 +122,10 @@ public class MaterialTechnique
         uint flagsPointer = br.ReadRelativePointer();
 
         ConstantB = br.ReadUInt32();
-        br.ReadBytes(SkipA);
+        // Debug.WriteLineIf(ConstantB != 198406, $"{nameof(ConstantB)} != 198406 : {ConstantB}");
+        for (var i = 0; i < SkipA.Length; i++)
+            SkipA[i] = br.ReadUInt32();
+
 
         for (var i = 0; i < 5; i++)
             SubObjects[i] = new(br);
@@ -118,10 +133,7 @@ public class MaterialTechnique
         if (br.MaterialLibrary!.Version >= 4)
             br.ReadBytes(AboveVersion4Structure);
 
-        var size = br.Tell() - start;
-
-        if (size != BinarySize)
-            Console.WriteLine($"Invalid alignment of type {GetType().Name}! Got: {size} Expected: {BinarySize}");
+        Debug.WriteLineIf(br.Tell() - start != BinarySize, $"Invalid alignment of type {GetType().Name}! Got: {br.Tell() - start} Expected: {BinarySize}");
 
         // V: Now that we have read the actual structure data, we need to jump around the file to get the rest of it
 
@@ -130,15 +142,22 @@ public class MaterialTechnique
         // ---------------------------
 
         Name = br.ReadStringAtAddress(namePointer);
-
-        br.Seek(passPointer);
-        for (var i = 0; i < MaterialPasses.Count; i++)
-            MaterialPasses[i] = new(br);
-
-        br.Seek(flagsPointer);
-        for (var i = 0; i < Flags.Count; i++)
-            Flags[i] = br.ReadUInt32();
-
+        br.TEMP.Add((namePointer, $"NAME"));
+        // Debug.WriteLine($"Reading Technique: \"{Name}\'");
+        if (MaterialPasses.Count > 0)
+        {
+            br.Seek(passPointer);
+            br.TEMP.Add((passPointer, $"MAT PASS[{MaterialPasses.Count}]"));
+            for (var i = 0; i < MaterialPasses.Count; i++)
+                MaterialPasses[i] = new(br);
+        }
+        if (Flags.Count > 0)
+        {
+            br.Seek(flagsPointer);
+            br.TEMP.Add((flagsPointer, $"FLAGS[{Flags.Count}]"));
+            for (var i = 0; i < Flags.Count; i++)
+                Flags[i] = br.ReadUInt32();
+        }
         // ---------------------------
         // V: Return so we can read the next struct, even though
         // it shouldn't matter, becuase these are *supposed* to be
