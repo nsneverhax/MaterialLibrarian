@@ -1,0 +1,13 @@
+﻿V: This appears to be the chunk layout
+
+MaterialTemplate
+MaterialTechnique
+MaterialPass
+ShaderProperties
+Defaults
+RenderStates
+UnknowPassChild
+UIProperties/Flags
+PropertyValues
+ReferencedStrings
+MicroCode

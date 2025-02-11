@@ -4,12 +4,12 @@ using System.Windows.Markup;
 
 namespace MaterialLibrarian.IO;
 
-public struct QueuedWrite(uint address, byte[] bytes)
-{
-    public uint Address { get; private set; } = address;
-    public byte[] Bytes { get; private set; } = bytes;
-}
+// V: I wish only mercy upon any of you who dare read this code
 
+
+/// <summary>
+/// Defines a chunk segment in the binary file we are writing to
+/// </summary>
 public class MatChunk
 {
     private uint _address = 0;
@@ -57,9 +57,6 @@ public class MatChunk
 
 public class MatBinaryWriter(FileStream stream) : IDisposable
 {
-    private List<QueuedWrite> _queuedWrites = [];
-    private List<QueuedWrite> _queuedMicroCode = [];
-
     public Stream BaseStream { get; private set; } = stream;
     /// <summary>
     /// The Material Library we are currently writing
