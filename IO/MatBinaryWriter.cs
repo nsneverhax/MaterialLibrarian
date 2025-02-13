@@ -507,7 +507,7 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
             if (cachedWrite.VertexShader.Length > 0)
             {
                 var orig = Tell();
-                Seek(cachedWrite.VertexShaderPointerAddress + shaderStart);
+                Seek(cachedWrite.VertexShaderPointerAddress + matStart);
                 Write(orig);
                 Seek(orig);
                 Write(cachedWrite.VertexShader);
@@ -515,7 +515,7 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
             if (cachedWrite.PixelShader.Length > 0)
             {
                 var orig = Tell();
-                Seek(cachedWrite.PixelShaderPointerAddress + shaderStart);
+                Seek(cachedWrite.PixelShaderPointerAddress + matStart);
                 Write(orig);
                 Seek(orig);
                 Write(cachedWrite.PixelShader);
