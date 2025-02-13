@@ -7,7 +7,7 @@ public struct RenderState
     public const uint BinarySize = 0x8;
     public RenderState(MatBinaryReader br)
     {
-        br.TEMP.Add((br.Tell(), this.GetType().Name));
+        // br.TEMP.Add((br.Tell(), this.GetType().Name));
 
         UnknownMember1_0x00 = br.ReadUInt32();
         UnknownMember2_0x04 = br.ReadUInt32();

@@ -68,12 +68,11 @@ public class MaterialLibrary
         var size = br.ReadUInt32(); // file size
 
         br.MaterialStart = br.Tell();
-        br.TEMP.Add((br.MaterialStart, "TEMPLATE"));
         // V: I could combine these, but I want this code to be readable
         for (var i = 0; i < MaterialTemplates.Count; i++)
         {
-            //var orig = br.Tell();
-
+            br.Seek(templatePointers[i] + br.MaterialStart);
+            br.TEMP.Add((br.Tell(), $"TEMPLATE #[{i}]"));
             MaterialTemplates[i] = new(br);
 
             //br.Seek(orig);

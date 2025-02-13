@@ -10,8 +10,9 @@ namespace MaterialLibrarian.IO;
 /// <summary>
 /// Defines a chunk segment in the binary file we are writing to
 /// </summary>
-public class MatChunk
+public class MatChunk(string name = "")
 {
+    public string Name { get; private set; } = name;
     private uint _address = 0;
     private uint _size = 0;
     private uint _streamPos = 0;
@@ -45,7 +46,7 @@ public class MatChunk
                 if (Grow)
                     _size = value - _address;
                 else
-                    throw new InvalidOperationException("Attempted to write outside chunk boundaries!");
+                    throw new InvalidOperationException($"{Name} : Attempted to write outside chunk boundaries! Needed {(value - _address) - _size} more bytes!");
             }
 
             _streamPos = Math.Clamp(value, _address, End);
@@ -65,56 +66,56 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
     /// <summary>
     /// Header Chunk
     /// </summary>
-    public MatChunk HeaderChunk { get; set; } = new();
+    public MatChunk HeaderChunk { get; set; } = new(nameof(HeaderChunk));
     /// <summary>
     /// TemplateTable Chunk
     /// </summary>
-    public MatChunk TemplateTableChunk { get; set; } = new();
+    public MatChunk TemplateTableChunk { get; set; } = new(nameof(TemplateTableChunk));
     /// <summary>
     /// MaterialTemplate Chunk
     /// </summary>
-    public MatChunk TemplateChunk { get; set; } = new();
+    public MatChunk TemplateChunk { get; set; } = new(nameof(TemplateChunk));
     /// <summary>
     /// MaterialTechnique Chunk
     /// </summary>
-    public MatChunk TechniqueChunk { get; set; } = new();
+    public MatChunk TechniqueChunk { get; set; } = new(nameof(TechniqueChunk));
     /// <summary>
     /// MaterialPass Chunk
     /// </summary>
-    public MatChunk PassChunk { get; set; } = new();
+    public MatChunk PassChunk { get; set; } = new(nameof(PassChunk));
     /// <summary>
     /// ShaderProperties Chunk
     /// </summary>
-    public MatChunk ShaderPropertiesChunk { get; set; } = new();
+    public MatChunk ShaderPropertiesChunk { get; set; } = new(nameof(ShaderPropertiesChunk));
     /// <summary>
     /// Defaults Chunk
     /// </summary>
-    public MatChunk DefaultsChunk { get; set; } = new();
+    public MatChunk DefaultsChunk { get; set; } = new(nameof(DefaultsChunk));
     /// <summary>
     /// RenderStates Chunk
     /// </summary>
-    public MatChunk RenderStatesChunk { get; set; } = new();
+    public MatChunk RenderStatesChunk { get; set; } = new(nameof(RenderStatesChunk));
 
     /// <summary>
     /// MaterialPass UnknownChild Chunk
     /// </summary>
-    public MatChunk UnknownPassChunk { get; set; } = new();
+    public MatChunk UnknownPassChunk { get; set; } = new(nameof(UnknownPassChunk));
     /// <summary>
     /// UIProperties Chunk
     /// </summary>
-    public MatChunk UIPropertiesChunk { get; set; } = new();
+    public MatChunk UIPropertiesChunk { get; set; } = new(nameof(UIPropertiesChunk));
     /// <summary>
     /// PropertyValue Chunk
     /// </summary>
-    public MatChunk PropertyValueChunk { get; set; } = new();
+    public MatChunk PropertyValueChunk { get; set; } = new(nameof(PropertyValueChunk));
     /// <summary>
     /// String Chunk
     /// </summary>
-    public MatChunk StringsChunk { get; set; } = new();
+    public MatChunk StringsChunk { get; set; } = new(nameof(StringsChunk));
     /// <summary>
     /// MicroCode Chunk
     /// </summary>
-    public MatChunk MicroCodeChunk { get; set; } = new();
+    public MatChunk MicroCodeChunk { get; set; } = new(nameof(MicroCodeChunk));
 
     private uint _lastNonChunkPosition = 0;
 
@@ -140,7 +141,7 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         }
 
         _activeChunks.Pop();
-
+        
         if (_activeChunks.Count == 0)
             BaseStream.Position = _lastNonChunkPosition;
         else
@@ -186,7 +187,18 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
                     RenderStatesCount += (uint)pass.RenderStates.Count;
                     UnknownCount += (uint)pass.UnknownChildren.Count;
                     expectedStringChunkSize += (uint)pass.Name.Length + 1;
+                    
+                    foreach (var property in pass.UIProperties)
+                    {
+                        if (property.Name is not null)
+                            expectedStringChunkSize += (uint)(property.Name.Length + 1);
+                        
+                        expectedPropertyValueChunkSize += property.ValueLength;
 
+                        if (property.PropertyType == UIPropertyType.NORMAL)
+                            expectedPropertyValueChunkSize++;
+                    }
+                    
                     foreach (var shader in pass.ShaderProperties)
                     {
                         DefaultsCount += (uint)shader.Defaults.Count;
@@ -200,6 +212,9 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
                         {
                             expectedStringChunkSize += (uint)(property.Name.Length + 1);
                             expectedPropertyValueChunkSize += property.ValueLength;
+
+                            if (property.PropertyType == UIPropertyType.NORMAL)
+                                expectedPropertyValueChunkSize++;
                         }
                     }
                     foreach (var shader in pass.GlobalProperties)
@@ -215,6 +230,8 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
                         {
                             expectedStringChunkSize += (uint)(property.Name.Length + 1);
                             expectedPropertyValueChunkSize += property.ValueLength;
+                            if (property.PropertyType == UIPropertyType.NORMAL)
+                                expectedPropertyValueChunkSize++;
                         }
                     }
                 }
@@ -228,10 +245,10 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         TemplateTableChunk.Size = ((uint)(MaterialLibrary.MaterialTemplates.Count + 1) * sizeof(uint));
 
         TemplateChunk.Address = TemplateTableChunk.End;
-        TemplateChunk.Size = MaterialTemplateCount* MaterialTemplate.BinarySize;
+        TemplateChunk.Size = MaterialTemplateCount * MaterialTemplate.BinarySize;
 
         TechniqueChunk.Address = TemplateChunk.End;
-        TechniqueChunk.Size = MaterialTemplateCount * MaterialTechnique.BinarySize;
+        TechniqueChunk.Size = MaterialTechniqueCount * MaterialTechnique.BinarySize;
 
         PassChunk.Address = TechniqueChunk.End;
         PassChunk.Size = MaterialPassCount * MaterialPass.BinarySize;
@@ -258,11 +275,20 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         StringsChunk.Size = expectedStringChunkSize;
 
         Write(new byte[StringsChunk.End]);
-
+        
         MicroCodeChunk.Address = StringsChunk.End;
         MicroCodeChunk.Size = 0;
         MicroCodeChunk.Grow = true;
 
+        MatChunk[] chunks =
+        [
+            TemplateTableChunk, TemplateChunk, TechniqueChunk, PassChunk, ShaderPropertiesChunk, DefaultsChunk,
+            RenderStatesChunk, UnknownPassChunk, UIPropertiesChunk,
+            PropertyValueChunk, StringsChunk
+        ];
+        
+        for (var i = 0; i < chunks.Length; i++)
+            Console.WriteLine($"{chunks[i].Address:X08} - {chunks[i].Name}");
         Trace.WriteLine($"Expected PropertyValueChunk[{expectedPropertyValueChunkSize}] - StringsChunk[{expectedStringChunkSize}]");
     }
 
@@ -330,9 +356,6 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
             buffer.Reverse();
 
         Write(buffer);
-
-        if (ActiveChunk is not null)
-            ActiveChunk.StreamPosition += (uint)buffer.Length;
     }
     public void Write(int value, bool littleEndian = false)
     {
@@ -344,9 +367,6 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
             buffer.Reverse();
 
         Write(buffer);
-
-        if (ActiveChunk is not null)
-            ActiveChunk.StreamPosition += (uint)buffer.Length;
     }
     public void Write(float value, bool littleEndian = false)
     {
@@ -358,9 +378,6 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
             buffer.Reverse();
 
         Write(buffer);
-
-        if (ActiveChunk is not null)
-            ActiveChunk.StreamPosition += (uint)buffer.Length;
     }
 
     public void WriteAtAddress(uint address, uint value, bool littleEndian = false)
@@ -397,7 +414,7 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
     #endregion
 
     /// <summary>
-    /// Write to the string chunk, advancing it's position by the length of the string + 1, and write the address of the string to the current stream advancing it by 4
+    /// Write to the string chunk, advancing its position by the length of the string + 1, and write the address of the string to the current stream advancing it by 4
     /// </summary>
     /// <param name="value"></param>
     public void WriteReferencedString(string value)
@@ -407,17 +424,18 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         Write(value);
 
         PopChunk();
-
+        
+        Console.WriteLine($"{Tell():X08}");
         Write(StringsChunk.StreamPosition - TemplateChunk.Address);
     }
 
     struct CachedMicroCodeWrite(uint vertexShaderPointerAddress, byte[] vertexShader, uint pixelShaderPointerAddress, byte[] pixelShader)
     {
-        uint VertexShaderPointerAddress { get; set; } = vertexShaderPointerAddress;
-        uint PixelShaderPointerAddress { get; set; } = pixelShaderPointerAddress;
+        public uint VertexShaderPointerAddress { get; set; } = vertexShaderPointerAddress;
+        public uint PixelShaderPointerAddress { get; set; } = pixelShaderPointerAddress;
 
-        byte[] VertexShader { get; set; } = vertexShader;
-        byte[] PixelShader { get; set; } = pixelShader;
+        public byte[] VertexShader { get; set; } = vertexShader;
+        public byte[] PixelShader { get; set; } = pixelShader;
     }
 
 
@@ -438,7 +456,21 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         MaterialLibrary = library;
 
         AllocateChunks();
+        
+        Seek(HeaderChunk.Address);
 
+        for (var i = 0; i < StringsChunk.End / 4; i++)
+        {
+            Write('P');
+            Write('A');
+            Write('D');
+            Write('!');
+            Write('P');
+            Write('A');
+            Write('D');
+            Write('!');
+        }
+        
         Seek(HeaderChunk.Address);
 
         Write(MaterialLibrary.ExpectedMagic);
@@ -447,7 +479,7 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
 
         //MicroCodePointerAddress = Tell();
         Write(StringsChunk.End);
-
+        
         Seek(TemplateTableChunk.Address);
         // V: Write MaterialTemplates Pointer Table
         // From what I can tell, these will always be stored contigously
@@ -456,20 +488,49 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
 
         var fileSizeLengthAddress = Tell();
         Write(0x00); // V: temp
-
+        Write(0x00); // V: temp
+        uint matStart = Tell();
         int iterator = 0;
 
         foreach (var template in MaterialLibrary.MaterialTemplates)
         {
-            Trace.WriteLine($"{iterator++}");
+            // Trace.WriteLine($"Writing Template: {iterator++} @ {Tell():X08}");
+            Seek(matStart + (uint)(iterator * MaterialTemplate.BinarySize));
             Write(template);
         }
-
+        
+        Seek(0, SeekOrigin.End);
+        uint shaderStart = Tell();
+        
+        foreach (var cachedWrite in _cachedMicroCodeWrites)
+        {
+            if (cachedWrite.VertexShader.Length > 0)
+            {
+                var orig = Tell();
+                Seek(cachedWrite.VertexShaderPointerAddress + shaderStart);
+                Write(orig);
+                Seek(orig);
+                Write(cachedWrite.VertexShader);
+            }
+            if (cachedWrite.PixelShader.Length > 0)
+            {
+                var orig = Tell();
+                Seek(cachedWrite.PixelShaderPointerAddress + shaderStart);
+                Write(orig);
+                Seek(orig);
+                Write(cachedWrite.PixelShader);
+            }
+        }
         Seek(0, SeekOrigin.End);
         WriteAtAddress(fileSizeLengthAddress, Tell() - fileSizeLengthAddress);
 
         MaterialLibrary = null;
+        
+        Trace.WriteLine("Finished Writing Material Library");
     }
+
+    private static uint techniqueNum = 0;
+    
     private void Write(MaterialTemplate template)
     {
         PushChunk(TemplateChunk);
@@ -561,8 +622,8 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
 
             Write(subObject.PixelShaderMemoryOffset);
 
-            //_cachedMicroCodeWrites.Enqueue(new(vertexPointerAddr, subObject.VertexShaderCode, pixelPointerAddr, subObject.PixelShaderCode));
-
+            _cachedMicroCodeWrites.Enqueue(new(vertexPointerAddr, subObject.VertexShaderCode, pixelPointerAddr, subObject.PixelShaderCode));
+            
             Write(subObject.A);
             Write(subObject.B);
             Write(subObject.C);
@@ -645,9 +706,10 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
             Write(structure.Item05);
             Write(structure.Item06);
             Write(structure.Item07);
+            if (MaterialLibrary.Version >= 4)
+                return;
             Write(structure.Item08);
             Write(structure.Item09);
-            Write(structure.Item10);
         }
     }
     private void Write(RenderState state)
@@ -719,7 +781,13 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
         Write(property.ValueLength);
 
         PushChunk(PropertyValueChunk);
+        uint start = Tell();
         Write(property.Value);
+
+        uint end = Tell();
+        
+        Trace.WriteLineIf(end - start != property.ValueLength, $"Wrote {end - start} but length was {property.ValueLength}");
+
         PopChunk();
 
         PopChunk();

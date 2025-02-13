@@ -58,20 +58,18 @@ public class UnknownStructureC
 
     public uint Item08 = 0; /* 0x20 */
     public uint Item09 = 1; /* 0x24 */
-    public uint Item10 = 0; /* 0x28 */
 
-    public bool IsZero => 
-        Item00 == 0 && 
-        Item01 == 0 && 
-        Item02 == 0 && 
-        Item03 == 0 && 
-        Item04 == 0 && 
-        Item05 == 0 && 
-        Item06 == 0 && 
-        Item07 == 0 && 
-        Item08 == 0 && 
-        Item09 == 0 && 
-        Item10 == 0;
+    public bool IsZero =>
+        Item00 == 0 &&
+        Item01 == 0 &&
+        Item02 == 0 &&
+        Item03 == 0 &&
+        Item04 == 0 &&
+        Item05 == 0 &&
+        Item06 == 0 &&
+        Item07 == 0 &&
+        Item08 == 0 &&
+        Item09 == 0;
     public UnknownStructureC() { }
     public UnknownStructureC(MatBinaryReader br)
     {
@@ -133,8 +131,7 @@ public class MaterialPass
 
     public MaterialPass() { }
     public MaterialPass(MatBinaryReader br) => Deserialize(br);
-
-
+    
     public void Deserialize(MatBinaryReader br)
     {
         uint start = br.Tell();
@@ -143,7 +140,7 @@ public class MaterialPass
 
         RenderStates = new(new RenderState[br.ReadUInt32()]);
         uint renderStatePointer = br.ReadRelativePointer();
-
+        
 #if !MATLIB_NOEXCEPT
         if (br.MaterialLibrary is null)
             throw new NullReferenceException(nameof(br.MaterialLibrary));
@@ -241,6 +238,15 @@ public class MaterialPass
             for (var i = 0; i < GlobalProperties.Count; i++)
                 GlobalProperties[i] = new(br);
         }
+        
+        if (UIProperties.Count > 0)
+        {
+            br.Seek(uiPointer);
+            br.TEMP.Add((uiPointer, $"Pass/Prop[{UIProperties.Count}]"));
+            for (var i = 0; i < UIProperties.Count; i++)
+                UIProperties[i] = new(br);
+        }
+        
         // ---------------------------
         // V: Return so we can read the next struct, even though
         // it shouldn't matter, becuase these are *supposed* to be
