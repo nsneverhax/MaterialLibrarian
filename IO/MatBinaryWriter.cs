@@ -419,14 +419,22 @@ public class MatBinaryWriter(FileStream stream) : IDisposable
     /// <param name="value"></param>
     public void WriteReferencedString(string value)
     {
+        if (value == "")
+        {
+            Write(-1);
+            return;
+        }
+        
         PushChunk(StringsChunk);
-
+        var stringAddr = StringsChunk.StreamPosition;
         Write(value);
 
         PopChunk();
         
-        Console.WriteLine($"{Tell():X08}");
-        Write(StringsChunk.StreamPosition - TemplateChunk.Address);
+        //Console.WriteLine($"{Tell():X08}");
+        var offset = stringAddr - TemplateChunk.Address;
+        Write(offset);
+        Console.WriteLine($"WROTE STRING{stringAddr:X08}");
     }
 
     struct CachedMicroCodeWrite(uint vertexShaderPointerAddress, byte[] vertexShader, uint pixelShaderPointerAddress, byte[] pixelShader)
