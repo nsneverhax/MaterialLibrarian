@@ -7,7 +7,7 @@ public class UnknownMaterialChild
 {
     public const uint BinarySize = 0x1A;
 
-    public uint[] Data = new uint[0x1A / sizeof(uint)];
+    public byte[] Data = new byte[0x1A];
 
     public UnknownMaterialChild() { }
     public UnknownMaterialChild(MatBinaryReader br)
@@ -17,8 +17,12 @@ public class UnknownMaterialChild
 
     public void Deserialize(MatBinaryReader br)
     {
+        uint start = br.Tell();
+
         for (var i = 0; i < Data.Length; i++)
-            Data[i] += br.ReadUInt32();
+            Data[i] += br.ReadByte();
+
+        Debug.WriteLineIf(br.Tell() - start != BinarySize, $"Invalid alignment of type {GetType().Name}! Got: {br.Tell() - start} Expected: {BinarySize}");
     }
 }
 
@@ -148,7 +152,6 @@ public class MaterialPass
 
         if (br.MaterialLibrary.Version < 4)
         {
-
             UnknownChildren = new(new UnknownMaterialChild[br.ReadUInt32()]);
             UnknownPtr = br.ReadRelativePointer();
 

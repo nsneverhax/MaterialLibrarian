@@ -63,8 +63,6 @@ public class MaterialLibrary
         for (var i = 0; i < MaterialTemplates.Count; i++)
             templatePointers[i] = br.ReadUInt32();
 
-
-
         var size = br.ReadUInt32(); // file size
 
         br.MaterialStart = br.Tell();

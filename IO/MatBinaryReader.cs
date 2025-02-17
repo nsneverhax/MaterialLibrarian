@@ -119,8 +119,9 @@ public class MatBinaryReader : IDisposable
 
         if (!littleEndian)
             buffer.Reverse();
+        int offset = BitConverter.ToInt32(buffer);
 
-        return (uint)(MaterialStart + BitConverter.ToInt32(buffer));
+        return (uint)(MaterialStart + offset);
     }
 
     public string ReadStringAtAddress(uint address)
